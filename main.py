@@ -16,13 +16,17 @@ fan = pop.Fan()
 rgb = pop.RgbLedBar()
 window = pop.Window()
 textlcd = pop.Textlcd()
+heater = pop.Heater()
 
 co2 = pop.CO2()
 soil = pop.SoilMoisture()
 light_in = pop.Light(0x5C)
 tphg_in = pop.Tphg(0x76)
 
-
+fancheck = False
+windowcheck = False
+ledcheck = False
+fanheatcheck = False
 print("Run")
 
 rgb.on()
@@ -63,53 +67,77 @@ print ("socket is listening")
 
 
 '''''' 
-b ='{ "co2val":0, "soilval":0, "light_inval":0, "tempin":0, "humiin":0}'
+
 
 while True:
     c, addr = s.accept()
     print ('Got connection from', addr)
+    try:
+        a = c.recv(1024).decode('utf8')
+        a0 = json.loads(a)
+        mess = a0['mess']
+    except:
+        str = "done"
+        a = str.encode('utf-8')
+        c.send(a)
+        c.close()
+        continue
     
-    a = c.recv(1024).decode('utf8')
-    a0 = json.loads(a)
-    mess = a0['mess']
-
     print(mess)
     if(mess == "off"):
         break
+    elif(mess == "check"):
+        check = {"fancheck": True, "windowcheck": True, "fanheatcheck": True, "rgb1":0, "rgb2":0, "rgb3":0}
+        rgbval = rgb.read()
+        check['fancheck'] = fancheck; check['windowcheck'] = windowcheck; check['fanheatcheck'] = fanheatcheck
+        
+        if(ledcheck == True):
+            check['rgb1'] = rgbval[0]; check['rgb2'] = rgbval[1]; check['rgb3'] = rgbval[2]
+        else:
+            check['rgb1'] = 0; check['rgb2'] = 0; check['rgb3'] = 0
+            
+        check00 = json.dumps(check)
+        res1 = check00.encode('utf-8')
+        c.send(res1)
     elif(mess == "fanon"):
         fan.on()
+        fancheck = True
     elif(mess == "fanoff"):
         fan.off()
+        fancheck = False
+    elif(mess == "fanheaton"):
+        heater.on()
+        fanheatcheck = True
+    elif(mess == "fanheatoff"):
+        heater.off()
+        fanheatcheck = False
     elif(mess == "windopn"):
         window.open()
+        windowcheck = True
     elif(mess == "windclos"):
         window.close()
+        windowcheck = False
     elif(mess == "ledon"):
         rgb.setColor([a0['rgb1'], a0['rgb2'], a0['rgb3']])
         rgb.on()
+        ledcheck = True
     elif(mess == "ledoff"):
+        rgb.setColor([0, 0, 0])
         rgb.on()
         rgb.off()
+        ledcheck = False
     elif(mess == "measre"):
-        '''
-        co2val = co2.read()
-        soilval = soil.read()
-        light_inval = light_in.read()
-        tempin, _, humiin, _ = tphg_in.read()'''
-        
-        #b = '{ "co2val":0, "soilval":0, "light_inval":0, "tempin":0, "humiin":0}'
-        #b1 = json.loads(b)
-        
         b1 = { "CO2":0, "SoilMoisture":0, "Light_0x5C":0, "Temperature":0, "Humidity":0}
-        b1['CO2'] = co2.read()
-        b1['SoilMoisture'] = soil.read()
-        b1['Light_0x5C'] = light_in.read()
+        b1['CO2'] = int(co2.read())
+        b1['SoilMoisture'] = int(soil.read())
+        b1['Light_0x5C'] = int(light_in.read())
         b1['Temperature'], _, b1['Humidity'], _ = tphg_in.read()
         
         b = json.dumps(b1)
         res = b.encode('utf-8')
         c.send(res)
-        
+    else:
+        continue
         
     str = "done"
     a = str.encode('utf-8')
